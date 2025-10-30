@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  frontend-dev:
+    # Tells Compose to build the Dockerfile in the current directory
+    build: .
+    
+    container_name: my-vite-dev
+    
+    ports:
+      # Map port 5173 on your host to 5173 in the container
+      - "5173:5173"
+      
+    volumes:
+      # Mount your current directory ('.') to '/app' in the container
+      - .:/app
+      # Add a 'named volume' for node_modules to prevent
+      # your local node_modules from overwriting the container's
+      - /app/node_modules
+
+    # This is the replacement for 'cp .env.example .env'
+    # It loads all variables from this file into the container
+    env_file:
+      #- .env.example
+      - .env
+
+    restart: unless-stopped
