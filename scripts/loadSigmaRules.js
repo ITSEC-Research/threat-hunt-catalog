@@ -53,7 +53,7 @@ function mapSeverity(level) {
     'high': 'high',
     'medium': 'medium',
     'low': 'low',
-    'informational': 'low'
+    'informational': 'informational'
   };
   return mapping[level?.toLowerCase()] || 'medium';
 }
@@ -72,21 +72,27 @@ function extractPlatform(logsource) {
 
 /**
  * Extract event type from logsource category
+ * Dynamically converts category to human-readable format
  */
 function extractEventType(logsource) {
-  const category = logsource?.category?.toLowerCase();
-  const mapping = {
-    'network_connection': 'Network Connection',
-    'process_creation': 'Process Creation',
-    'file_event': 'File Creation',
-    'registry_event': 'Registry',
-    'powershell': 'PowerShell',
-    'wmi': 'WMI',
-    'dns_query': 'DNS Query',
-    'application': 'Application Log',
-    'webserver': 'Web Server'
-  };
-  return mapping[category] || 'Other';
+  const category = logsource?.category;
+
+  // Return 'Other' if no category is found
+  if (!category) return 'Other';
+
+  // Convert category to title case with spaces
+  // Examples:
+  //   'network_connection' -> 'Network Connection'
+  //   'process_creation' -> 'Process Creation'
+  //   'dns_query' -> 'Dns Query'
+  //   'PowerShell' -> 'Powershell'
+  const eventType = category
+    .replace(/[-_]/g, ' ')  // Replace hyphens and underscores with spaces
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+
+  return eventType;
 }
 
 /**
@@ -323,8 +329,6 @@ function generateDummyResults(ruleId, severity, logsource) {
  */
 async function processSigmaRule(filePath, sigmaYaml) {
   try {
-    console.log(`Processing ${filePath}...`);
-
     // Parse YAML
     const sigmaRule = yaml.parse(sigmaYaml);
 
@@ -353,33 +357,62 @@ async function processSigmaRule(filePath, sigmaYaml) {
       huntResults: generateDummyResults(sigmaRule.id, mapSeverity(sigmaRule.level), sigmaRule.logsource)
     };
 
-    console.log(`✓ Successfully processed: ${rule.title}`);
-    return rule;
+    return { success: true, rule };
   } catch (error) {
-    console.error(`✗ Failed to process ${filePath}:`, error.message);
-    return null;
+    return { success: false, error: error.message, filePath };
   }
 }
 
 /**
  * Load all Sigma rules from directory
  */
-async function loadSigmaRules() {
+async function loadSigmaRules(cliProgress) {
   try {
     const files = await readdir(SIGMA_DIR);
     const yamlFiles = files.filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
 
-    console.log(`Found ${yamlFiles.length} Sigma rule(s)`);
+    console.log(`Found ${yamlFiles.length} Sigma rule(s)\n`);
+
+    // Create progress bar
+    const progressBar = new cliProgress.SingleBar({
+      format: 'Processing |{bar}| {percentage}% | {value}/{total} rules | {status}',
+      barCompleteChar: '\u2588',
+      barIncompleteChar: '\u2591',
+      hideCursor: true
+    });
+
+    progressBar.start(yamlFiles.length, 0, { status: 'Starting...' });
 
     const rules = [];
-    for (const file of yamlFiles) {
+    const errors = [];
+
+    for (let i = 0; i < yamlFiles.length; i++) {
+      const file = yamlFiles[i];
       const filePath = join(SIGMA_DIR, file);
       const content = await readFile(filePath, 'utf-8');
-      const rule = await processSigmaRule(file, content);
-      if (rule) {
-        rules.push(rule);
+
+      const result = await processSigmaRule(file, content);
+
+      if (result.success) {
+        rules.push(result.rule);
+        progressBar.update(i + 1, { status: `✓ ${result.rule.title.substring(0, 40)}...` });
+      } else {
+        errors.push(result);
+        progressBar.update(i + 1, { status: `✗ ${file}` });
       }
     }
+
+    progressBar.stop();
+
+    // Show errors if any
+    if (errors.length > 0) {
+      console.log(`\n⚠ ${errors.length} rule(s) failed to process:`);
+      errors.forEach(err => {
+        console.log(`  ✗ ${err.filePath}: ${err.error}`);
+      });
+    }
+
+    console.log(`\n✓ Successfully processed ${rules.length}/${yamlFiles.length} rule(s)`);
 
     return rules;
   } catch (error) {
@@ -400,13 +433,13 @@ export const detectionRules = ${JSON.stringify(rules, null, 2)};
 `;
 
   await writeFile(OUTPUT_FILE, fileContent, 'utf-8');
-  console.log(`\n✓ Generated ${OUTPUT_FILE} with ${rules.length} rule(s)`);
+  console.log(`✓ Generated ${OUTPUT_FILE} with ${rules.length} rule(s)`);
 }
 
 /**
  * Main execution
  */
-async function main() {
+async function main(cliProgress) {
   let backendProcess = null;
 
   try {
@@ -416,10 +449,10 @@ async function main() {
     backendProcess = await ensureBackend();
 
     // Load and process rules
-    const rules = await loadSigmaRules();
+    const rules = await loadSigmaRules(cliProgress);
 
     if (rules.length === 0) {
-      console.warn('\n⚠ No rules were processed successfully');
+      console.warn('⚠ No rules were processed successfully');
       process.exit(1);
     }
 
@@ -438,20 +471,23 @@ async function main() {
   }
 }
 
-// Install yaml parser first
-console.log('Note: This script requires the "yaml" package. Installing...\n');
+// Install required packages first
+console.log('Note: This script requires "yaml" and "cli-progress" packages. Installing...\n');
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
 try {
-  await execAsync('npm install yaml');
+  await execAsync('npm install yaml cli-progress');
   console.log('✓ Dependencies ready\n');
 } catch (error) {
-  console.error('Failed to install yaml package:', error.message);
+  console.error('Failed to install required packages:', error.message);
   process.exit(1);
 }
 
+// Dynamically import cli-progress after installation
+const cliProgress = await import('cli-progress');
+
 // Run main
-main();
+main(cliProgress.default);

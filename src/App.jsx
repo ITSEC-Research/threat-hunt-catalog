@@ -1272,7 +1272,7 @@ function App() {
                   </button>
                   {!eventTypeFilterCollapsed && (
                     <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                      {['Network Connection', 'Process Creation', 'File Creation', 'Registry', 'PowerShell', 'WMI', 'DNS Query', 'Application Log', 'Web Server', 'Other'].map(eventType => (
+                      {uniqueEventTypes.sort().map(eventType => (
                         <label key={eventType} className="flex items-center gap-2 px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 cursor-pointer transition-colors">
                           <input
                             type="checkbox"
