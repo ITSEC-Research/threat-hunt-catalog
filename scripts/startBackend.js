@@ -50,7 +50,13 @@ function startBackendProcess() {
     });
 
     backend.stderr.on('data', (data) => {
-      console.error(`[Backend Error] ${data.toString()}`);
+      const output = data.toString();
+      // Only show actual errors, not normal Flask logs (which go to stderr)
+      // Show only lines with ERROR, CRITICAL, or 4xx/5xx status codes (except 400 for expected Sigma conversion errors)
+      if (output.includes('ERROR') || output.includes('CRITICAL') || output.includes('Traceback') ||
+          (output.match(/HTTP\/1\.\d+"\s+[45]\d{2}/) && !output.includes('400'))) {
+        console.error(`[Backend Error] ${output}`);
+      }
     });
 
     backend.on('error', (error) => {
