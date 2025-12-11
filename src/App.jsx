@@ -1255,14 +1255,14 @@ function App() {
                   )}
                 </div>
 
-                {/* Event Type Filter */}
+                {/* Category Filter */}
                 <div>
                   <button
                     onClick={() => setEventTypeFilterCollapsed(!eventTypeFilterCollapsed)}
                     className="w-full flex items-center justify-between text-xs font-semibold text-slate-300 mb-2 hover:text-white transition-colors"
                   >
                     <span className="flex items-center gap-2">
-                      Event Type {selectedEventType.length > 0 && (
+                      Category {selectedEventType.length > 0 && (
                         <span className="ml-1 px-1.5 py-0.5 bg-purple-600 text-white rounded-full text-xs">
                           {selectedEventType.length}
                         </span>
@@ -1501,10 +1501,6 @@ function App() {
                         <div className="flex items-center gap-4 mb-2 text-xs text-slate-400">
                           <span>
                             <span className="font-medium">Platform:</span> {rule.platform}
-                          </span>
-                          <span>•</span>
-                          <span>
-                            <span className="font-medium">Event:</span> {rule.eventType}
                           </span>
                           <span>•</span>
                           <span>
